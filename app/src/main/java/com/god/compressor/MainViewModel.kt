@@ -45,7 +45,7 @@ class MainViewModel : ViewModel() {
             val name = FileUtil.displayName(ctx, uri)
             val data = withContext(Dispatchers.IO) { FileUtil.readBytes(ctx, uri) }
             _status.value = "Mengompres ${name} (${data.size / 1024} KB)..."
-            val entry = GodFormat.Entry(name, false, data, 0o644, System.currentTimeMillis() / 1000)
+            val entry = GodFormat.Entry(name, false, data, 420, System.currentTimeMillis() / 1000)
             val blob = withContext(Dispatchers.Default) {
                 GodFormat.pack(listOf(entry), progress = { p, t ->
                     _progress.value = if (t > 0) p.toFloat() / t else 0f
