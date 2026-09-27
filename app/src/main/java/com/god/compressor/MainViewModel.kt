@@ -20,7 +20,7 @@ import java.util.Locale
 data class SaveResult(val suggestedName: String, val data: ByteArray)
 
 class MainViewModel : ViewModel() {
-    private val _snap = MutableStateFlow(SystemSnapshot(0f,0,0,0,0,0,0))
+    private val _snap = MutableStateFlow(SystemSnapshot(0f, 0, 0, 0, 0, 0, 0))
     val snap = _snap.asStateFlow()
 
     private val _status = MutableStateFlow("Siap.")
@@ -32,9 +32,19 @@ class MainViewModel : ViewModel() {
     private val _result = MutableStateFlow<SaveResult?>(null)
     val result = _result.asStateFlow()
 
+    /** Set progress dengan sanitasi NaN/Inf dan clamp ke [0,1]. */
+    private fun setProgress(done: Long, total: Long) {
+        val v = if (total > 0L) (done.toDouble() / total.toDouble()).toFloat() else 0f
+        _progress.value = if (v.isFinite()) v.coerceIn(0f, 1f) else 0f
+    }
+
     fun refreshStats(ctx: Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            _snap.value = SystemStats.snapshot(ctx)
+            try {
+                _snap.value = SystemStats.snapshot(ctx.applicationContext)
+            } catch (_: Throwable) {
+                // biarkan nilai lama, jangan crash
+            }
         }
     }
 
@@ -47,19 +57,18 @@ class MainViewModel : ViewModel() {
             _status.value = "Mengompres ${name} (${data.size / 1024} KB)..."
             val entry = GodFormat.Entry(name, false, data, 420, System.currentTimeMillis() / 1000)
             val blob = withContext(Dispatchers.Default) {
-                GodFormat.pack(listOf(entry), progress = { p, t ->
-                    _progress.value = if (t > 0) p.toFloat() / t else 0f
-                })
+                GodFormat.pack(listOf(entry), progress = { p, t -> setProgress(p, t) })
             }
-            val ratio = data.size.toDouble() / blob.size
-            val save = 100 - blob.size * 100.0 / data.size
+            val ratio = if (blob.isNotEmpty()) data.size.toDouble() / blob.size else 0.0
+            val save = if (data.isNotEmpty()) 100 - blob.size * 100.0 / data.size else 0.0
             _status.value = "✔ ${data.size / 1024} KB → ${blob.size / 1024} KB  " +
                             "(${"%.2f".format(ratio)}x, hemat ${"%.1f".format(save)}%)"
             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             _result.value = SaveResult("${name}_$ts.god", blob)
             _progress.value = 0f
-        } catch (e: Exception) {
-            _status.value = "✘ Gagal: ${e.message}"
+        } catch (t: Throwable) {
+            _status.value = "✘ Gagal: ${t.message ?: t.javaClass.simpleName}"
+            _progress.value = 0f
         }
     }
 
@@ -69,21 +78,19 @@ class MainViewModel : ViewModel() {
             _status.value = "Membaca arsip .god..."
             val blob = withContext(Dispatchers.IO) { FileUtil.readBytes(ctx, uri) }
             val entries = withContext(Dispatchers.Default) {
-                GodFormat.unpack(blob, progress = { p, t ->
-                    _progress.value = if (t > 0) p.toFloat() / t else 0f
-                })
+                GodFormat.unpack(blob, progress = { p, t -> setProgress(p, t) })
             }
             val lines = entries.joinToString("\n") { e ->
                 if (e.isDir) "  📁 ${e.name}/" else "  📄 ${e.name}  (${e.data.size / 1024} KB)"
             }
-            _status.value = "✔ ${entries.size} entri dari arsip:\n$lines"
-            val first = entries.firstOrNull { !it.isDir }
-            if (first != null) {
+            _status.value = "✔ ${entries.size} entri:\n$lines"
+            entries.firstOrNull { !it.isDir }?.let { first ->
                 _result.value = SaveResult(first.name, first.data)
             }
             _progress.value = 0f
-        } catch (e: Exception) {
-            _status.value = "✘ Gagal: ${e.message}"
+        } catch (t: Throwable) {
+            _status.value = "✘ Gagal: ${t.message ?: t.javaClass.simpleName}"
+            _progress.value = 0f
         }
     }
 
@@ -93,8 +100,8 @@ class MainViewModel : ViewModel() {
             withContext(Dispatchers.IO) { FileUtil.writeBytes(ctx, uri, r.data) }
             _status.value = "✔ Tersimpan: ${r.suggestedName}"
             _result.value = null
-        } catch (e: Exception) {
-            _status.value = "✘ Gagal simpan: ${e.message}"
+        } catch (t: Throwable) {
+            _status.value = "✘ Gagal simpan: ${t.message ?: t.javaClass.simpleName}"
         }
     }
 }

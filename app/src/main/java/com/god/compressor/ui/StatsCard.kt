@@ -15,6 +15,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.god.compressor.util.SystemSnapshot
 
+/** Kembalikan Float yang 100% aman (bukan NaN/Inf, dalam [0,1]). */
+private fun safeFraction(value: Float): Float {
+    if (!value.isFinite()) return 0f
+    return value.coerceIn(0f, 1f)
+}
+
+/** Hitung rasio used/total dengan aman, hindari div-by-zero. */
+private fun safeRatio(used: Long, total: Long): Float {
+    if (total <= 0L) return 0f
+    val v = used.toFloat() / total.toFloat()
+    return safeFraction(v)
+}
+
 @Composable
 fun StatsCard(s: SystemSnapshot) {
     Column(
@@ -26,13 +39,33 @@ fun StatsCard(s: SystemSnapshot) {
         Text("System Monitor", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
 
-        StatBar("CPU", s.cpuPercent / 100f, "${"%.1f".format(s.cpuPercent)}%  (${s.cores} core)")
+        if (s.cpuAvailable) {
+            StatBar(
+                "CPU",
+                safeFraction(s.cpuPercent / 100f),
+                "${"%.1f".format(s.cpuPercent)}%  (${s.cores} core)"
+            )
+        } else {
+            StatBar("CPU", 0f, "N/A (perlu akses sistem)")
+        }
         Spacer(Modifier.height(6.dp))
-        StatBar("RAM sistem", s.ramUsedMb.toFloat() / s.ramTotalMb,
-                "${s.ramUsedMb} / ${s.ramTotalMb} MB")
+
+        if (s.ramAvailable && s.ramTotalMb > 0L) {
+            StatBar(
+                "RAM sistem",
+                safeRatio(s.ramUsedMb, s.ramTotalMb),
+                "${s.ramUsedMb} / ${s.ramTotalMb} MB"
+            )
+        } else {
+            StatBar("RAM sistem", 0f, "N/A")
+        }
         Spacer(Modifier.height(6.dp))
-        StatBar("RAM app", (s.appRamMb.toFloat() / s.ramTotalMb).coerceIn(0f, 1f),
-                "${s.appRamMb} MB")
+
+        if (s.ramTotalMb > 0L) {
+            StatBar("RAM app", safeRatio(s.appRamMb, s.ramTotalMb), "${s.appRamMb} MB")
+        } else {
+            StatBar("RAM app", 0f, "${s.appRamMb} MB")
+        }
         Spacer(Modifier.height(6.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -44,20 +77,24 @@ fun StatsCard(s: SystemSnapshot) {
 
 @Composable
 private fun StatBar(label: String, fraction: Float, value: String) {
+    val f = safeFraction(fraction)
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(label, style = MaterialTheme.typography.bodyMedium)
             Text(value, style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(2.dp))
         LinearProgressIndicator(
-            progress = fraction.coerceIn(0f, 1f),
+            progress = f,
             modifier = Modifier.fillMaxWidth().height(6.dp),
             color = when {
-                fraction > 0.85f -> Color(0xFFE53935)
-                fraction > 0.6f -> Color(0xFFFB8C00)
-                else -> MaterialTheme.colorScheme.primary
+                f > 0.85f -> Color(0xFFE53935)
+                f > 0.6f  -> Color(0xFFFFA000)
+                else       -> MaterialTheme.colorScheme.primary
             },
             trackColor = MaterialTheme.colorScheme.surface
         )

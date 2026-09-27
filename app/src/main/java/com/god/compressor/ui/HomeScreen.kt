@@ -23,7 +23,10 @@ fun HomeScreen(vm: MainViewModel) {
     val result by vm.result.collectAsState()
 
     LaunchedEffect(Unit) {
-        while (true) { vm.refreshStats(ctx); delay(1000) }
+        while (true) {
+            try { vm.refreshStats(ctx) } catch (_: Throwable) {}
+            delay(1000)
+        }
     }
 
     val pickCompress = rememberLauncherForActivityResult(
@@ -39,10 +42,11 @@ fun HomeScreen(vm: MainViewModel) {
     ) { uri -> uri?.let { vm.saveResult(ctx, it) } }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("GOD Compressor v2.1") }) }
+        topBar = { TopAppBar(title = { Text("GOD Compressor v2.3") }) }
     ) { pad ->
         Column(
-            Modifier.padding(pad).fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState()),
+            Modifier.padding(pad).fillMaxSize().padding(12.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             StatsCard(snap)
@@ -61,9 +65,11 @@ fun HomeScreen(vm: MainViewModel) {
                 }
             }
 
-            if (progress in 0f..1f && progress > 0f) {
+            // Progress bar: sanitasi dulu, jangan pernah kirim NaN/Inf ke Compose
+            val safeProgress = if (progress.isFinite()) progress.coerceIn(0f, 1f) else 0f
+            if (safeProgress > 0.005f && safeProgress < 0.995f) {
                 LinearProgressIndicator(
-                    progress = progress,
+                    progress = safeProgress,
                     modifier = Modifier.fillMaxWidth().height(8.dp)
                 )
             }
