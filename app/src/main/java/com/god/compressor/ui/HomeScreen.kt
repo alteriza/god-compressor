@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.god.compressor.MainViewModel
 import kotlinx.coroutines.delay
 
@@ -18,10 +17,10 @@ import kotlinx.coroutines.delay
 @Composable
 fun HomeScreen(vm: MainViewModel) {
     val ctx = LocalContext.current
-    val snap by vm.snap.collectAsStateWithLifecycle()
-    val status by vm.status.collectAsStateWithLifecycle()
-    val progress by vm.progress.collectAsStateWithLifecycle()
-    val result by vm.result.collectAsStateWithLifecycle()
+    val snap by vm.snap.collectAsState()
+    val status by vm.status.collectAsState()
+    val progress by vm.progress.collectAsState()
+    val result by vm.result.collectAsState()
 
     LaunchedEffect(Unit) {
         while (true) { vm.refreshStats(ctx); delay(1000) }
